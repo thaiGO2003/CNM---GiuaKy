@@ -73,114 +73,229 @@ Tạo file `index.js` và thêm đoạn code sau:
 const express = require('express');
 const AWS = require('aws-sdk');
 const multer = require('multer');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 require("dotenv").config();
-
+//config
 const app = express();
-app.use(express.static("./views"));
+app.use(express.static("./views"))
 app.set('view engine', 'ejs');
 app.set("views", "./views");
+
+// AWS
 
 AWS.config.update({
     accessKeyId: process.env.ACCESS_KEY,
     secretAccessKey: process.env.SECRET_KEY,
     region: process.env.REGION
 });
+const bucketName = process.env.BUCKET;
+const dynamoName = process.env.DYNAMO;
 
 const s3 = new AWS.S3();
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
-const upload = multer({ storage: multer.memoryStorage() });
+
+// Multer
+const upload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: function (req, file, cb) {
+        checkFile(file, cb);
+    },
+    limits: { fileSize: 10000000 } // 10MB
+});
+
+const checkFile = (file, cb) => {
+    const filetypes = /jpeg|jpg|png|gif/;
+    const extname = path.extname(file.originalname).toLowerCase();
+    const mimetype = filetypes.test(file.mimetype);
+    if (mimetype && extname) {
+        return cb(null, true);
+    } else {
+        cb("Error: Images Only!");
+    }
+}
 
 app.get('/SaiGonCar', async (req, res) => {
     try {
-        const data = await dynamoDB.scan({ TableName: process.env.DYNAMO }).promise();
-        res.render('index', { data: data.Items });
+        const data = await dynamoDB.scan({ TableName: dynamoName }).promise();
+        res.render('index.ejs', { data: data.Items });
     } catch (error) {
-        res.status(500).send({ error: error.message });
+        return res.status(500).send({ error: error.message });
     }
 });
 
 app.post('/insert', upload.single('HinhDaiDien'), async (req, res) => {
-    const { TenXe, LoaiXe, GiaXe } = req.body;
-    if (!TenXe || !LoaiXe || !GiaXe || !req.file) {
-        return res.status(400).send({ error: "Please fill all fields and upload an image." });
+    const { TenXe, LoaiXe, GiaXe } = req.body
+    if (TenXe === "" || LoaiXe === "" || GiaXe === "") {
+        return res.status(500).send({ error: "Please fill all the fields!" });
+    } else if (parseFloat(GiaXe) <= 0) {
+        return res.status(500).send({ error: "Price must be greater than 0!" });
+    }else if(req.file === undefined){
+        return res.status(500).send({ error: "Please choose a file!" });
     }
     try {
-        const uploadResult = await s3.upload({
-            Bucket: process.env.BUCKET,
+        s3.upload({
+            Bucket: bucketName,
             Key: req.file.originalname,
-            Body: req.file.buffer
-        }).promise();
+            Body: req.file.buffer,
 
-        await dynamoDB.put({
-            TableName: process.env.DYNAMO,
-            Item: {
-                MaXe: uuidv4(),
-                TenXe,
-                LoaiXe,
-                GiaXe: parseFloat(GiaXe),
-                HinhDaiDien: uploadResult.Location
+        }, async (error, data) => {
+            if (error) {
+                return res.status(500).send({ error: error.message });
+            } else {
+                const { Location } = data;
+                await dynamoDB.put({
+                    TableName: dynamoName,
+                    Item: {
+                        MaXe: uuidv4(),
+                        TenXe,
+                        LoaiXe,
+                        GiaXe: parseFloat(GiaXe),
+                        HinhDaiDien: Location
+                    }
+                }).promise();
+                res.redirect('/SaiGonCar');
             }
-        }).promise();
-        res.redirect('/SaiGonCar');
+        })
     } catch (error) {
-        res.status(500).send({ error: error.message });
+        return res.status(500).send({ error: error.message });
     }
-});
+})
 
-app.post("/delete", async (req, res) => {
+
+app.post("/delete", upload.fields([]), async (req, res) => {
     const listChecked = Object.keys(req.body);
+    console.log("Danh sách MaXe cần xóa:", listChecked); // In ra danh sách các MaXe
+
     if (listChecked.length === 0) {
         return res.redirect('/SaiGonCar');
     }
+
     try {
-        for (const maXe of listChecked) {
-            await dynamoDB.delete({
-                TableName: process.env.DYNAMO,
-                Key: { MaXe: maXe }
-            }).promise();
+        deleteItem = (index) => {
+            dynamoDB.delete({
+                TableName: dynamoName,
+                Key: {
+                    MaXe: listChecked[index]
+                }
+            }, (error) => {
+                if (error) {
+                    return res.status(500).send({ error: error.message });
+                } else {
+                    if (index === 0) {
+                        res.redirect('/SaiGonCar');
+                    } else {
+                        deleteItem(index - 1);
+                    }
+                }
+
+            })
         }
-        res.redirect('/SaiGonCar');
+        deleteItem(listChecked.length - 1);
     } catch (error) {
-        res.status(500).send({ error: error.message });
+        return res.status(500).send({ error: error.message });
     }
-});
+})
+
+app.get("/", (req, res) => {
+    res.redirect('/SaiGonCar');
+})
 
 app.listen(80, () => {
     console.log('Server is running on port 80');
-});
+})
 ```
 
 ## 7. Tạo File `views/index.ejs`
 Tạo thư mục `views` và file `index.ejs`:
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-    <title>Danh sách các dòng xe</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
 </head>
+<style>
+
+</style>
+
 <body>
     <h1>Danh sách các dòng xe</h1>
+
     <form action="/insert" method="post" enctype="multipart/form-data">
-        <input type="text" name="TenXe" placeholder="Tên xe">
-        <input type="text" name="LoaiXe" placeholder="Loại xe">
-        <input type="number" name="GiaXe" placeholder="Giá">
-        <input type="file" name="HinhDaiDien">
-        <button type="submit">Thêm xe</button>
+        <div style="display: flex;">
+            <label for="" style="width: 100px;">Tên dòng xe(*)</label>
+            <input type="text" style="width: 100px;" name="TenXe">
+        </div>
+        <br>
+        <div style="display: flex;">
+            <label for="LoaiXe" style="width: 100px;">Loại xe(*)</label>
+            <select style="width: 120px;" name="LoaiXe" id="LoaiXe">
+                <option value="Sedan">Sedan</option>
+                <option value="SUV">SUV</option>
+                <option value="Hatchback">Hatchback</option>
+                <option value="Coupe">Coupe</option>
+                <option value="Convertible">Convertible</option>
+                <option value="Truck">Truck</option>
+            </select>
+        </div>        
+        <br>
+
+        <div style="display: flex;">
+            <label for="" style="width: 100px;">Giá(*)</label>
+            <input style="width: 100px;" type="text" name="GiaXe">
+        </div>
+        <br>
+
+        <div style="display: flex;">
+            <label for="" style="width: 100px;">Hình ảnh(*)</label>
+            <input style="width: 200px;" type="file" name="HinhDaiDien" accept="*" >
+        </div>
+
+        <button type="submit">Thêm xe </button>
     </form>
-    <form action="/delete" method="post">
+    <br>
+
+    <form action="/delete" method="post" enctype="multipart/form-data">
         <button type="submit">Xóa</button>
-        <ul>
-            <% data.forEach((item, index) => { %>
-                <li>
-                    <input type="checkbox" name="<%= item.MaXe %>">
-                    <%= item.TenXe %> - <%= item.LoaiXe %> - <%= item.GiaXe %>
-                    <img src="<%= item.HinhDaiDien %>" width="100">
-                </li>
-            <% }); %>
-        </ul>
+        <table cellpadding="0" cellspacing="0" border="1"
+            style="display: flex; justify-content: center; align-items: center; border: 0;">
+            <tr>
+                <th style="width: 100px;">STT</th>
+                <th style="width: 100px;">Tên xe</th>
+                <th style="width: 100px;">Loại xe</th>
+                <th style="width: 100px;">Giá(Triệu)</th>
+                <th style="width: 100px;">Chi tiết</th>
+                <th style="width: 100px;">Hành động</th>
+            </tr>
+
+            <% for( let index=0; index < data.length; index++ ) { %>
+                <tr style="height: 20px; text-align: center; border: solid 1px black;">
+                    <td>
+                        <%= index + 1 %>
+                    </td>
+
+                    <td>
+                        <%= data[index].TenXe %>
+                    </td>
+                    <td>
+                        <%= data[index].LoaiXe %>
+                    </td>
+                    <td>
+                        <%= data[index].GiaXe %>
+                    </td>
+                    <td><img src="<%= data[index].HinhDaiDien %>" alt="" height="100%" width="100px"></td>
+                    <td>
+                        <input type="checkbox" name="<%=  data[index].MaXe%>" value="<%= data[index].MaXe %>">
+                    </td>
+                </tr>
+                <% } %>
+        </table>
     </form>
 </body>
+
 </html>
 ```
 
