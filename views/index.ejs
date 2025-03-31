@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<style>
+
+</style>
+
+<body>
+    <h1>Danh sách các dòng xe</h1>
+
+    <form action="/insert" method="post" enctype="multipart/form-data">
+        <div style="display: flex;">
+            <label for="" style="width: 100px;">Tên dòng xe(*)</label>
+            <input type="text" style="width: 100px;" name="TenXe">
+        </div>
+        <br>
+        <div style="display: flex;">
+            <label for="" style="width: 100px;">Loại xe(*)</label>
+            <input style="width: 100px;" type="text" name="LoaiXe">
+        </div>
+        <br>
+
+        <div style="display: flex;">
+            <label for="" style="width: 100px;">Giá(*)</label>
+            <input style="width: 100px;" type="text" name="GiaXe">
+        </div>
+        <br>
+
+        <div style="display: flex;">
+            <label for="" style="width: 100px;">Hình ảnh(*)</label>
+            <input style="width: 200px;" type="file" name="HinhDaiDien" accept="*" >
+        </div>
+
+        <button type="submit">Thêm xe </button>
+    </form>
+    <br>
+
+    <form action="/delete" method="post" enctype="multipart/form-data">
+        <button type="submit">Xóa</button>
+        <table cellpadding="0" cellspacing="0" border="1"
+            style="display: flex; justify-content: center; align-items: center; border: 0;">
+            <tr>
+                <th style="width: 100px;">STT</th>
+                <th style="width: 100px;">Tên xe</th>
+                <th style="width: 100px;">Loại xe</th>
+                <th style="width: 100px;">Giá(Triệu)</th>
+                <th style="width: 100px;">Chi tiết</th>
+                <th style="width: 100px;">Hành động</th>
+            </tr>
+
+            <% for( let index=0; index < data.length; index++ ) { %>
+                <tr style="height: 20px; text-align: center; border: solid 1px black;">
+                    <td>
+                        <%= index + 1 %>
+                    </td>
+
+                    <td>
+                        <%= data[index].TenXe %>
+                    </td>
+                    <td>
+                        <%= data[index].LoaiXe %>
+                    </td>
+                    <td>
+                        <%= data[index].GiaXe %>
+                    </td>
+                    <td><img src="<%= data[index].HinhDaiDien %>" alt="" height="100%" width="100px"></td>
+                    <td>
+                        <input type="checkbox" name="<%=  data[index].MaXe%>" value="<%= data[index].MaXe %>">
+                    </td>
+                </tr>
+                <% } %>
+        </table>
+    </form>
+</body>
+
+</html>
