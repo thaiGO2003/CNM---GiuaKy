@@ -230,7 +230,7 @@ app.listen(80, () => {
 });
 ```
 
-## 7. Tạo File `views/index.ejs`
+## 11. Tạo File `views/index.ejs`
 Tạo thư mục `views` và file `index.ejs`:
 ```html
 <!DOCTYPE html>
@@ -323,7 +323,7 @@ Tạo thư mục `views` và file `index.ejs`:
 </html>
 ```
 
-## 8. Chạy Dự Án
+## 12. Chạy Dự Án
 ```sh
 npm start
 ```
